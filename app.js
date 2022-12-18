@@ -5,15 +5,19 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-// const encrypt = require("mongoose-encryption");
-const md5 = require("md5");
+const session = require("express-session");
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 
 const app = express();
 const port = 3000;
 
-app.use(express.static("public"));
+app.use(express.static('public'));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({ secret: 'myLittleSecret.', resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
 
 
 //mongoose
@@ -24,13 +28,17 @@ async function main() {
 }
 
 const userSchema = new mongoose.Schema({
-    email: String,
-    pw: String
+    username: String,
+    password: String
 });
 
-// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['pw'] });
+userSchema.plugin(passportLocalMongoose);
 
 const User = new mongoose.model('User', userSchema);
+
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 
 //get requests
@@ -49,35 +57,56 @@ app.get('/register', (req, res) => {
 
 });
 
+app.get('/secrets', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.render('secrets');
+    } else {
+        res.redirect('/login');
+    }
+
+});
+
+app.get('/logout', (req, res, next) => {
+    req.logout((err) => {
+      if (err) {
+        return next(err);
+      }
+      res.redirect('/');
+    });
+
+});
+
 
 //post requests
 app.post('/register', (req, res) =>{
-    const newUser = new User({
-        email: req.body.username,
-        pw: md5(req.body.password)
-    });
-    newUser.save((err) => {
-        if (!err) {
-            console.log('New user added.');
-            res.render('secrets');
+    User.register({username: req.body.username}, req.body.password, (err, user) => {
+        if (err) {
+            console.log(err);
+            res.redirect('/register')
+        } else {
+            passport.authenticate('local')(req, res, () => {
+                res.redirect('/secrets');
+            });
         }
     });
 
 });
 
 app.post('/login', async (req, res) => {
-    const email = req.body.username;
-    const pw = md5(req.body.password);
+    const user = new User({
+        username: req.body.username,
+        password: req.body.password
+    });
 
-    const userMatches = await User.find({email: email});
-    if (userMatches) {
-        if (userMatches[0].pw=== pw) res.render('secrets');
-        res.send('Password is incorrect..!');
-
-    } else {
-        res.send('User not found..!');
-        
-    }
+    req.login(user, err => {
+        if (err) {
+            console.log(err);
+        } else {
+            passport.authenticate('local')(req, res, () => {
+                res.redirect('/secrets');
+            });
+        }
+    });
 
 });
 
