@@ -1,10 +1,12 @@
 //jshint esversion:6
 require("dotenv").config()
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+// const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
 
 const app = express();
 const port = 3000;
@@ -26,7 +28,7 @@ const userSchema = new mongoose.Schema({
     pw: String
 });
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['pw'] });
+// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['pw'] });
 
 const User = new mongoose.model('User', userSchema);
 
@@ -52,7 +54,7 @@ app.get('/register', (req, res) => {
 app.post('/register', (req, res) =>{
     const newUser = new User({
         email: req.body.username,
-        pw: req.body.password
+        pw: md5(req.body.password)
     });
     newUser.save((err) => {
         if (!err) {
@@ -65,7 +67,7 @@ app.post('/register', (req, res) =>{
 
 app.post('/login', async (req, res) => {
     const email = req.body.username;
-    const pw = req.body.password;
+    const pw = md5(req.body.password);
 
     const userMatches = await User.find({email: email});
     if (userMatches) {
@@ -74,6 +76,7 @@ app.post('/login', async (req, res) => {
 
     } else {
         res.send('User not found..!');
+        
     }
 
 });
